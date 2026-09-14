@@ -37,6 +37,7 @@ TRAY_LABEL_TO_KEY = {
 
 
 def parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Validate the dashboard-selected source plant and destination tray."""
     valid_plants = sorted(TRAY_PLANT_JOINTS[PLANT_ACTIVE_TRAY].keys())
 
     parser = argparse.ArgumentParser(description="Integrated plant pick and place node")
@@ -58,6 +59,7 @@ def parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(args=None):
+    """Configure the plant gripper and execute one dashboard planting request."""
     parsed_args = parse_cli_args(args)
     rclpy.init(args=args)
 

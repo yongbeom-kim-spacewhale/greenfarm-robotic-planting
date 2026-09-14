@@ -1,4 +1,5 @@
-# 통합본 전용 긴급정지 노드다. MoveStop 서비스로 즉시 정지를 요청한다.
+# 통합본 전용 소프트웨어 안전정지 노드다. 서보를 끄지 않고 MoveStop으로
+# 현재 이동을 빠르게 정지한다. 물리 비상정지(E-Stop)와는 별도 기능이다.
 from __future__ import annotations
 
 import rclpy
@@ -16,8 +17,9 @@ DEFAULT_QSTOP = 1
 
 
 def main(args=None):
+    """Send the controller's quick MoveStop request from an auxiliary process."""
     rclpy.init(args=args)
-    node = rclpy.create_node("integrated_emergency_stop", namespace=ROBOT_ID)
+    node = rclpy.create_node("integrated_safety_stop", namespace=ROBOT_ID)
     DR_init.__dsr__node = node
 
     try:
@@ -50,7 +52,7 @@ def main(args=None):
         if response is None or not response.success:
             raise RuntimeError("MoveStop service call rejected")
 
-        node.get_logger().info(f"Emergency stop requested stop_mode={stop_mode}")
+        node.get_logger().info(f"Safety stop requested stop_mode={stop_mode}")
     finally:
         node.destroy_node()
         rclpy.shutdown()

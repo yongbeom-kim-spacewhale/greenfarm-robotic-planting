@@ -10,6 +10,7 @@ import rclpy
 from robot_tests.compliance_common import extract_fz, safe_release_compliance
 from robot_tests.dsr_runtime import bootstrap_dsr_python
 from robot_tests.motion_primitives import (
+    DEFAULT_HOME_Z_OFFSET,
     HOME_JOINT,
     get_current_joint_timeout,
     is_home_joint,
@@ -45,6 +46,7 @@ from robot_tests.robot_motion_data import (
     TRAY_SOIL_TOP_POSES,
     TRAY_SOIL_VEL as VEL,
 )
+from robot_tests.safety_state import ensure_motion_allowed
 
 bootstrap_dsr_python()
 
@@ -54,6 +56,7 @@ configure_dsr_init(DR_init)
 
 
 def parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Read the dashboard-selected tray and HOME handoff option."""
     parser = argparse.ArgumentParser(description="Integrated tray soil state check node")
     parser.add_argument(
         "--tray",
@@ -76,6 +79,7 @@ def parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def classify_single_z(z):
+    """Classify one valid contact height against configured soil thresholds."""
     if z is None:
         return "FAILED_CONTACT"
     if LOW_MIN <= z <= LOW_MAX:
@@ -88,6 +92,7 @@ def classify_single_z(z):
 
 
 def describe_soil_state(state):
+    """Convert an internal soil-state token into operator-readable text."""
     if state == "SOIL_LOW":
         return "흙 부족"
     if state == "SOIL_OK":
@@ -104,6 +109,7 @@ def describe_soil_state(state):
 
 
 def classify_tray_result(corner_results):
+    """Combine four corner contacts into one dashboard soil decision."""
     measured_corners = [dict(corner) for corner in corner_results if corner.get("z") is not None]
     failed_contacts = []
 
@@ -186,6 +192,7 @@ def classify_tray_result(corner_results):
 
 
 def log_classification_result(node, result):
+    """Emit human logs plus stable markers parsed by the dashboard process."""
     corner_states = {}
     for group_name in (
         "valid_corners",
@@ -246,28 +253,39 @@ def go_home_with_gripper_held(
     posj,
     dr_base,
     get_current_posj,
+    move_up: bool = True,
+    z_offset: float = DEFAULT_HOME_Z_OFFSET,
 ) -> None:
+    """Lift and move HOME while preserving the press plate grip state."""
     current_joint = get_current_joint_timeout(node)
     if is_home_joint(current_joint):
         node.get_logger().info(f"Safe HOME skip: robot is already at HOME -> {current_joint}")
         return
 
-    node.get_logger().info("Step 1/2: move up before home while keeping gripper state")
-    move_up_from_current(
-        node=node,
-        get_current_posx=get_current_posx,
-        movel=movel,
-        posx=posx,
-        wait=wait,
-        dr_base=dr_base,
-    )
+    if move_up:
+        node.get_logger().info("Step 1/2: move up before home while keeping gripper state")
+        move_up_from_current(
+            node=node,
+            get_current_posx=get_current_posx,
+            movel=movel,
+            posx=posx,
+            wait=wait,
+            dr_base=dr_base,
+            z_offset=z_offset,
+        )
+    else:
+        node.get_logger().info(
+            "Step 1/2: skip extra Z lift; robot is already at tray center-top"
+        )
 
     node.get_logger().info(f"Step 2/2: move to home joint {HOME_JOINT}")
+    ensure_motion_allowed()
     movej(posj(HOME_JOINT), vel=60.0, acc=60.0)
     wait(0.5)
 
 
 def main(args=None):
+    """Probe the requested tray, publish classification markers, and return HOME."""
     parsed_args = parse_cli_args(args)
     rclpy.init(args=args)
 
@@ -300,23 +318,30 @@ def main(args=None):
     set_digital_outputs_fn, set_digital_output_fn = import_digital_output_apis()
 
     def make_pose(x, y, z, rx, ry, rz):
+        """Build one six-axis Cartesian SDK pose."""
         return posx(float(x), float(y), float(z), float(rx), float(ry), float(rz))
 
     def make_corner_top_pose(base_top_pose, x, y, z):
+        """Use a tray's taught orientation at a named corner coordinate."""
         return make_pose(x, y, z, base_top_pose[3], base_top_pose[4], base_top_pose[5])
 
     def move_l(name, target, vel=VEL, acc=ACC, sleep=0.5):
+        """Move the press TCP linearly and log the named measurement waypoint."""
         node.get_logger().info(f"Move start: {name} -> {target}")
+        ensure_motion_allowed()
         ret = movel(target, vel=vel, acc=acc)
         node.get_logger().info(f"Move ret: {name} = {ret}")
         wait(sleep)
 
     def return_to_pose(name, pose):
+        """Retract from contact back to the saved corner-top pose."""
         node.get_logger().info(f"Return to {name}")
+        ensure_motion_allowed()
         movel(posx(pose), vel=PROBE_VEL, acc=PROBE_ACC)
         wait(0.5)
 
     def compliance_probe_down(tray_name, corner_name, top_pose):
+        """Descend under compliance until force contact or the Z limit is reached."""
         start_pose = normalize_pose(get_current_posx(ref=DR_BASE))
         start_z = start_pose[2]
         limit_z = start_z - MAX_DOWN_DISTANCE
@@ -337,6 +362,7 @@ def main(args=None):
         contact_detected = False
         current_z = start_z
 
+        ensure_motion_allowed()
         amovel(posx(limit_pose), vel=PROBE_VEL, acc=PROBE_ACC)
 
         while check_motion() == 2:
@@ -368,6 +394,7 @@ def main(args=None):
         return current_z
 
     def probe_corner(tray_name, corner_name, x, y, z, tray_top_pose):
+        """Approach, probe and retract one corner, returning its contact result."""
         top_pose = make_corner_top_pose(tray_top_pose, x, y, z)
 
         move_l(
@@ -387,6 +414,7 @@ def main(args=None):
         }
 
     def inspect_tray(tray_name):
+        """Probe all configured corners and return the combined classification."""
         tray_top_pose = normalize_pose(TRAY_SOIL_TOP_POSES[tray_name])
         corners = TRAY_CORNERS_XYZ[tray_name]
         corner_results = []
@@ -447,6 +475,9 @@ def main(args=None):
                 posj=posj,
                 dr_base=DR_BASE,
                 get_current_posj=get_current_posj,
+                # 측정 종료 시에는 이미 CENTER_TOP_RETURN에 있으므로
+                # 중복되는 추가 Z 상승 없이 바로 관절 HOME으로 복귀한다.
+                move_up=False,
             )
         node.get_logger().info("integrated_tray_soil_state_check finished")
 

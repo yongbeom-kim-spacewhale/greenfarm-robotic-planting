@@ -26,7 +26,7 @@
     QPushButton#btn_start { background-color: #eaf8ed; color: #0b7a25; border: 1px solid #6fbe7b; }
     QPushButton#btn_stop { background-color: #fff7e6; color: #b36b00; border: 1px solid #f2c15f; }
     QPushButton#btn_shutdown { background-color: #eef2f7; color: #374151; border: 1px solid #bfc8d2; }
-    QPushButton#btn_estop { background-color: #fff0f0; color: #d60000; border: 1px solid #ff9b9b; }
+    QPushButton#btn_estop { background-color: #fff0f0; color: #d60000; border: 1px solid #ff9b9b; font-size: 14px; }
     QPushButton#btn_recovery { background-color: #eef8ff; color: #075985; border: 1px solid #7dd3fc; }
     QPushButton#btn_home, QPushButton#btn_tray_check, QPushButton#btn_tray1_move, QPushButton#btn_tray2_move, QPushButton#btn_tray3_move, QPushButton#btn_tray4_move { color: #0b6b20; }
     QPushButton#btn_press_pickup, QPushButton#btn_press_putdown, QPushButton#btn_shovel_pickup, QPushButton#btn_shovel_putdown { font-size: 13px; font-weight: 700; color: #1f2937; }
@@ -90,7 +90,7 @@
     <widget class="QLabel" name="lbl_system_state_title">
      <property name="geometry">
       <rect>
-       <x>20</x>
+       <x>0</x>
        <y>10</y>
        <width>120</width>
        <height>30</height>
@@ -109,9 +109,9 @@
     <widget class="QLabel" name="lbl_robot_status">
      <property name="geometry">
       <rect>
-       <x>120</x>
+       <x>100</x>
        <y>10</y>
-       <width>101</width>
+       <width>201</width>
        <height>30</height>
       </rect>
      </property>
@@ -128,7 +128,7 @@
     <widget class="QFrame" name="line_header">
      <property name="geometry">
       <rect>
-       <x>250</x>
+       <x>320</x>
        <y>10</y>
        <width>1</width>
        <height>34</height>
@@ -141,7 +141,7 @@
     <widget class="QLabel" name="lbl_ros_title">
      <property name="geometry">
       <rect>
-       <x>300</x>
+       <x>340</x>
        <y>10</y>
        <width>90</width>
        <height>30</height>
@@ -160,7 +160,7 @@
     <widget class="QLabel" name="lbl_ros_status">
      <property name="geometry">
       <rect>
-       <x>390</x>
+       <x>440</x>
        <y>10</y>
        <width>150</width>
        <height>30</height>
@@ -194,7 +194,7 @@
       <rect>
        <x>14</x>
        <y>50</y>
-       <width>95</width>
+       <width>76</width>
        <height>81</height>
       </rect>
      </property>
@@ -205,9 +205,9 @@
     <widget class="QPushButton" name="btn_shutdown">
      <property name="geometry">
       <rect>
-       <x>117</x>
+       <x>96</x>
        <y>50</y>
-       <width>95</width>
+       <width>76</width>
        <height>81</height>
       </rect>
      </property>
@@ -218,9 +218,9 @@
     <widget class="QPushButton" name="btn_recovery">
      <property name="geometry">
       <rect>
-       <x>220</x>
+       <x>260</x>
        <y>50</y>
-       <width>95</width>
+       <width>76</width>
        <height>81</height>
       </rect>
      </property>
@@ -231,14 +231,30 @@
     <widget class="QPushButton" name="btn_home">
      <property name="geometry">
       <rect>
-       <x>323</x>
+       <x>342</x>
        <y>50</y>
-       <width>95</width>
+       <width>76</width>
        <height>81</height>
       </rect>
      </property>
      <property name="text">
       <string>HOME</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="btn_estop">
+     <property name="geometry">
+      <rect>
+       <x>178</x>
+       <y>50</y>
+       <width>76</width>
+       <height>81</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>서보를 유지하고 현재 이동을 빠르게 정지합니다.</string>
+     </property>
+     <property name="text">
+      <string>안전정지</string>
      </property>
     </widget>
     <widget class="QPushButton" name="btn_press_pickup">
@@ -1615,7 +1631,7 @@ p, li { white-space: pre-wrap; }
      <x>0</x>
      <y>0</y>
      <width>1459</width>
-     <height>21</height>
+     <height>28</height>
     </rect>
    </property>
   </widget>

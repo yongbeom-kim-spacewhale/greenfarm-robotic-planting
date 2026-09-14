@@ -29,6 +29,7 @@ configure_dsr_init(DR_init)
 
 
 def parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Read the tray selected by the dashboard flatten action."""
     parser = argparse.ArgumentParser(description="Integrated tray soil flatten node")
     parser.add_argument(
         "--tray",
@@ -41,6 +42,7 @@ def parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(args=None):
+    """Run one compliance flatten cycle and restore common Tool/TCP settings."""
     parsed_args = parse_cli_args(args)
     rclpy.init(args=args)
     node = rclpy.create_node("integrated_tray_soil_flatten", namespace=ROBOT_ID)

@@ -3,9 +3,12 @@
 
 from __future__ import annotations
 
+import time
+
 import rclpy
 
 from robot_tests.robot_motion_data import GRIPPER_HOME_PREPARE, GRIPPER_PICK_CLOSE, HOME_JOINT
+from robot_tests.safety_state import ensure_motion_allowed
 
 DEFAULT_VELOCITY = 60.0
 DEFAULT_ACCELERATION = 60.0
@@ -14,6 +17,8 @@ DEFAULT_HOME_Z_OFFSET = 120.0
 HOME_MOVE_VELOCITY = 75.0
 HOME_MOVE_ACCELERATION = 70.0
 DIGITAL_OUTPUT_TIMEOUT_SEC = 5.0
+DIGITAL_OUTPUT_MAX_ATTEMPTS = 3
+DIGITAL_OUTPUT_RETRY_DELAY_SEC = 0.3
 HOME_JOINT_TOLERANCE_DEG = 1.0
 CURRENT_JOINT_TIMEOUT_SEC = 5.0
 
@@ -41,12 +46,14 @@ def normalize_pose(raw_pose: object) -> list[float]:
 
 
 def pose(values: list[float]) -> list[float]:
+    """Validate a six-element robot joint or Cartesian pose before SDK use."""
     if len(values) != 6:
         raise ValueError(f"Pose must have 6 elements, got {len(values)}")
     return [float(value) for value in values]
 
 
 def is_home_joint(current_joint: object) -> bool:
+    """Check whether all six joints are within the configured HOME tolerance."""
     joint_values = normalize_pose(current_joint)
     return all(
         abs(current - target) <= HOME_JOINT_TOLERANCE_DEG
@@ -79,6 +86,7 @@ def get_current_joint_timeout(node) -> list[float]:
 
 
 def set_outputs_compat(node, set_digital_outputs_fn=None, set_digital_output_fn=None):
+    """Provide one timeout-safe multi-channel gripper output callable."""
     if set_digital_outputs_fn is not None:
         return set_digital_outputs_fn
 
@@ -97,29 +105,58 @@ def set_outputs_compat(node, set_digital_outputs_fn=None, set_digital_output_fn=
     )
 
     def _set_outputs(channels: list[int]) -> None:
+        """Apply signed channel values through bounded ROS service calls."""
         if not client.wait_for_service(timeout_sec=DIGITAL_OUTPUT_TIMEOUT_SEC):
             raise RuntimeError("Digital output service unavailable")
 
         for channel in channels:
             index = abs(int(channel))
             value = 1 if int(channel) > 0 else 0
-            request = SetCtrlBoxDigitalOutput.Request()
-            request.index = index
-            request.value = value
-            future = client.call_async(request)
-            rclpy.spin_until_future_complete(
-                node,
-                future,
-                timeout_sec=DIGITAL_OUTPUT_TIMEOUT_SEC,
-            )
-            if not future.done():
-                raise RuntimeError(
-                    f"Digital output timeout: channel={index}, value={value}"
+            last_error = "unknown error"
+
+            # 출력 설정은 같은 값을 반복해도 결과가 동일하므로, 일시적인 ROS 서비스
+            # 응답 지연에는 제한된 횟수만 재시도하고 영구 대기는 방지한다.
+            for attempt in range(1, DIGITAL_OUTPUT_MAX_ATTEMPTS + 1):
+                request = SetCtrlBoxDigitalOutput.Request()
+                request.index = index
+                request.value = value
+                future = client.call_async(request)
+                rclpy.spin_until_future_complete(
+                    node,
+                    future,
+                    timeout_sec=DIGITAL_OUTPUT_TIMEOUT_SEC,
                 )
-            response = future.result()
-            if response is None or not response.success:
+
+                if not future.done():
+                    future.cancel()
+                    last_error = "response timeout"
+                else:
+                    try:
+                        response = future.result()
+                    except Exception as exc:
+                        last_error = f"service exception: {exc}"
+                    else:
+                        if response is not None and response.success:
+                            if attempt > 1:
+                                node.get_logger().info(
+                                    "Digital output retry succeeded: "
+                                    f"channel={index}, value={value}, attempt={attempt}"
+                                )
+                            break
+                        last_error = "controller rejected request"
+
+                if attempt < DIGITAL_OUTPUT_MAX_ATTEMPTS:
+                    node.get_logger().warn(
+                        "Digital output request failed; retrying: "
+                        f"channel={index}, value={value}, attempt={attempt}/"
+                        f"{DIGITAL_OUTPUT_MAX_ATTEMPTS}, error={last_error}"
+                    )
+                    time.sleep(DIGITAL_OUTPUT_RETRY_DELAY_SEC)
+            else:
                 raise RuntimeError(
-                    f"Digital output rejected: channel={index}, value={value}"
+                    "Digital output failed after retries: "
+                    f"channel={index}, value={value}, "
+                    f"attempts={DIGITAL_OUTPUT_MAX_ATTEMPTS}, error={last_error}"
                 )
 
     node.get_logger().info("Using timeout-safe set_digital_output compatibility wrapper")
@@ -127,12 +164,14 @@ def set_outputs_compat(node, set_digital_outputs_fn=None, set_digital_output_fn=
 
 
 def gripper_command(node, set_digital_outputs, wait, name: str, channels: list[int]) -> None:
+    """Apply a named gripper I/O pattern and allow the fingers to settle."""
     node.get_logger().info(f"Gripper command: {name} -> {channels}")
     set_digital_outputs(channels)
     wait(DEFAULT_WAIT)
 
 
 def prepare_home_joint(node, set_digital_outputs, wait) -> None:
+    """Partially open the gripper to reduce collision risk during HOME travel."""
     # 홈 복귀 전 그리퍼 간섭을 줄이기 위해 넓게 열린 상태로 맞춘다.
     gripper_command(
         node,
@@ -154,6 +193,7 @@ def move_j(
     acc: float = DEFAULT_ACCELERATION,
     check_motion=None,
 ) -> None:
+    """Execute a checked joint-space move for taught posture transitions."""
     # 조인트 기반 이동. 큰 자세 전환이나 IK 해를 고정하고 싶을 때 사용.
     # 작업 시작점의 HOME 명령만 현재 자세가 이미 HOME이면 생략한다.
     # HOME_RETURN과 일반 경유점은 작업 완료/경로 보장을 위해 항상 실행한다.
@@ -172,6 +212,7 @@ def move_j(
 
     target = posj(pose(joint_values))
     node.get_logger().info(f"MoveJ start: {name} -> {joint_values} @ vel={vel}, acc={acc}")
+    ensure_motion_allowed()
     ret = movej(target, vel=vel, acc=acc)
     node.get_logger().info(f"MoveJ ret: {name} = {ret}")
     if ret not in (None, 0):
@@ -193,9 +234,11 @@ def move_l(
     acc: float = DEFAULT_ACCELERATION,
     check_motion=None,
 ) -> None:
+    """Execute a straight TCP move where the end-effector path matters."""
     # TCP 직선 이동. 집기/삽입처럼 경로 자체가 중요한 구간에 사용.
     target_pose = pose(pose_values)
     node.get_logger().info(f"MoveL start: {name} -> {target_pose} @ vel={vel}, acc={acc}")
+    ensure_motion_allowed()
     movel(posx(target_pose), vel=vel, acc=acc)
     if check_motion is not None:
         while check_motion() == 2:
@@ -214,6 +257,7 @@ def move_up_from_current(
     vel: float = DEFAULT_VELOCITY,
     acc: float = DEFAULT_ACCELERATION,
 ) -> None:
+    """Lift vertically from the current TCP pose before a large posture change."""
     # 현재 TCP 자세에서 base Z 방향으로 먼저 들어 올린 뒤 홈으로 가기 위한 준비 동작.
     node.get_logger().info(f"Move up {z_offset:.1f} mm from current TCP pose")
     current_pose = normalize_pose(get_current_posx(ref=dr_base))
@@ -223,6 +267,7 @@ def move_up_from_current(
     node.get_logger().info(
         f"Current pose z={current_pose[2]:.3f} -> target z={target_pose[2]:.3f}"
     )
+    ensure_motion_allowed()
     movel(posx(target_pose), vel=vel, acc=acc)
     wait(DEFAULT_WAIT)
 
@@ -238,6 +283,7 @@ def go_home(
     posj,
     dr_base,
 ) -> None:
+    """Run the common safe HOME flow: open, lift vertically, then joint HOME."""
     # 기본 홈 복귀 절차: 그리퍼 열기 -> 현재 위치에서 위로 상승 -> 홈 조인트 이동.
     node.get_logger().info("Step 1/3: open gripper")
     gripper_command(
@@ -262,6 +308,7 @@ def go_home(
 
     node.get_logger().info(f"Step 3/3: move to home joint {HOME_JOINT}")
     prepare_home_joint(node, set_digital_outputs, wait)
+    ensure_motion_allowed()
     movej(
         posj(HOME_JOINT),
         vel=HOME_MOVE_VELOCITY,

@@ -1,1 +1,1 @@
-"""Integrated multi-step robot scenarios and dashboard entrypoints."""
+"""통합 다단계 로봇 시나리오와 대시보드 진입점을 제공한다."""

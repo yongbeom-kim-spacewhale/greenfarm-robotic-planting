@@ -1,4 +1,4 @@
-"""Doosan M0609 shovel pickup sequence node."""
+"""Doosan M0609 shovel putdown sequence node."""
 
 from __future__ import annotations
 
@@ -6,13 +6,10 @@ import rclpy
 
 from robot_tests.dsr_runtime import bootstrap_dsr_python
 from robot_tests.motion_primitives import (
-    GRIPPER_PICK_CLOSE,
     HOME_JOINT,
     move_j,
-    move_up_from_current,
     prepare_home_joint,
     set_outputs_compat,
-    gripper_command,
 )
 from robot_tests.node_common import (
     ROBOT_ID,
@@ -37,12 +34,22 @@ FAST_VEL = 80.0
 FAST_ACC = 80.0
 SLOW_VEL = 20.0
 SLOW_ACC = 20.0
+READY_STABILIZE_WAIT = 1.0
 
 
-def run_sequence(node, movej, movel, posj, posx, get_current_posx, dr_base, set_digital_outputs, wait) -> None:
-    node.get_logger().info("Step 1/5: go home safely")
-    prepare_home_joint(node, set_digital_outputs, wait)
-    move_j(node, movej, posj, wait, "HOME", HOME_JOINT, vel=FAST_VEL, acc=FAST_ACC)
+def run_sequence(node, movej, posj, set_digital_outputs, wait, check_motion) -> None:
+    node.get_logger().info("Step 1/5: go home with shovel gripped")
+    move_j(
+        node,
+        movej,
+        posj,
+        wait,
+        "HOME",
+        HOME_JOINT,
+        vel=FAST_VEL,
+        acc=FAST_ACC,
+        check_motion=check_motion,
+    )
 
     node.get_logger().info("Step 2/5: move to shovel ready joint")
     move_j(
@@ -54,42 +61,32 @@ def run_sequence(node, movej, movel, posj, posx, get_current_posx, dr_base, set_
         SHOVEL_READY_JOINT,
         vel=FAST_VEL,
         acc=FAST_ACC,
+        check_motion=check_motion,
     )
+    node.get_logger().info(f"Stabilize at shovel ready joint for {READY_STABILIZE_WAIT:.1f}s")
+    wait(READY_STABILIZE_WAIT)
 
-    node.get_logger().info("Step 3/5: wide open gripper")
-    wait(1.0)
-    prepare_home_joint(node, set_digital_outputs, wait)
-
-    node.get_logger().info("Step 4/5: move to shovel pick joint and grip")
+    node.get_logger().info("Step 3/5: move to shovel putdown joint")
     move_j(
         node,
         movej,
         posj,
         wait,
-        "SHOVEL_PICK",
+        "SHOVEL_PUTDOWN",
         SHOVEL_PICK_JOINT,
         vel=SLOW_VEL,
         acc=SLOW_ACC,
-    )
-    wait(1.0)
-    gripper_command(
-        node,
-        set_digital_outputs,
-        wait,
-        "SHOVEL_PICK_CLOSE_0010",
-        GRIPPER_PICK_CLOSE,
+        check_motion=check_motion,
     )
 
-    node.get_logger().info("Step 5/5: move up 120 mm, then return home with shovel gripped")
-    move_up_from_current(
-        node=node,
-        get_current_posx=get_current_posx,
-        movel=movel,
-        posx=posx,
-        wait=wait,
-        dr_base=dr_base,
-        z_offset=120.0,
-    )
+    node.get_logger().info("Step 4/5: open gripper and release shovel")
+    wait(1.0)
+    # 열기 명령 직전부터는 삽 해제 여부가 불확실할 수 있는 구간이다.
+    node.get_logger().info("tool_phase=SHOVEL_PUTTING_RELEASE")
+    prepare_home_joint(node, set_digital_outputs, wait)
+    node.get_logger().info("tool_phase=SHOVEL_RELEASED")
+
+    node.get_logger().info("Step 5/5: return home")
     move_j(
         node,
         movej,
@@ -99,12 +96,13 @@ def run_sequence(node, movej, movel, posj, posx, get_current_posx, dr_base, set_
         HOME_JOINT,
         vel=FAST_VEL,
         acc=FAST_ACC,
+        check_motion=check_motion,
     )
 
 
 def main(args: list[str] | None = None) -> None:
     rclpy.init(args=args)
-    node = rclpy.create_node("shovel_pickup", namespace=ROBOT_ID)
+    node = rclpy.create_node("shovel_putdown", namespace=ROBOT_ID)
     DR_init.__dsr__node = node
 
     try:
@@ -126,19 +124,16 @@ def main(args: list[str] | None = None) -> None:
         run_sequence(
             node=node,
             movej=motion_apis["movej"],
-            movel=motion_apis["movel"],
             posj=motion_apis["posj"],
-            posx=motion_apis["posx"],
-            get_current_posx=motion_apis["get_current_posx"],
-            dr_base=motion_apis["DR_BASE"],
             set_digital_outputs=set_digital_outputs,
             wait=motion_apis["wait"],
+            check_motion=motion_apis["check_motion"],
         )
-        node.get_logger().info("shovel_pickup complete")
+        node.get_logger().info("shovel_putdown complete")
     except KeyboardInterrupt:
         node.get_logger().info("Stopped by user")
     except Exception as exc:
-        node.get_logger().error(f"shovel_pickup failed: {exc}")
+        node.get_logger().error(f"shovel_putdown failed: {exc}")
         raise
     finally:
         node.destroy_node()

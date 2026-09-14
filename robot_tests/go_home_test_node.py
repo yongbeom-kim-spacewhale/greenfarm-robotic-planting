@@ -28,6 +28,7 @@ configure_dsr_init(DR_init)
 
 
 def main(args: list[str] | None = None) -> None:
+    """Run the dashboard HOME sequence: configure robot, open, lift, and move HOME."""
     rclpy.init(args=args)
     node = rclpy.create_node("m0609_go_home_test", namespace=ROBOT_ID)
     DR_init.__dsr__node = node

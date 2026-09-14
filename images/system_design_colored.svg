@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="980" viewBox="0 0 1500 980">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#333"/>
+    </marker>
+    <style>
+      text { font-family: Arial, 'Malgun Gothic', sans-serif; fill: #222; }
+      .title { font-size: 34px; font-weight: 700; }
+      .section { font-size: 20px; font-weight: 700; fill: #2d573e; }
+      .box { stroke-width: 2.5; rx: 8; }
+      .green { fill: #e7f4ea; stroke: #4c8b62; }
+      .blue { fill: #eaf2ff; stroke: #4d78b8; }
+      .yellow { fill: #fff4d8; stroke: #c99120; }
+      .red { fill: #fdeaea; stroke: #c75353; }
+      .gray { fill: #f5f5f5; stroke: #777; }
+      .purple { fill: #f1e8f7; stroke: #8a65a7; }
+      .node { font-size: 18px; font-weight: 700; }
+      .sub { font-size: 15px; fill: #555; }
+      .small { font-size: 13px; fill: #555; }
+      .tiny { font-size: 12px; fill: #555; }
+      .arrow { stroke: #333; stroke-width: 2.5; marker-end: url(#arrow); fill: none; }
+      .dash { stroke: #4d78b8; stroke-width: 2.2; stroke-dasharray: 8 7; marker-end: url(#arrow); fill: none; }
+      .service { stroke: #777; stroke-width: 2; fill: #fff; rx: 6; }
+    </style>
+  </defs>
+
+  <text x="750" y="46" text-anchor="middle" class="title">GreenFarm System Architecture</text>
+  <text x="750" y="75" text-anchor="middle" class="sub">PyQt Dashboard → ROS 2 작업 노드 → Doosan virtual/real driver → M0609 협동로봇</text>
+
+  <rect x="30" y="100" width="1440" height="820" fill="none" stroke="#cfcfcf" stroke-width="2" rx="18" stroke-dasharray="8 8"/>
+
+  <text x="70" y="135" class="section">1. User / Dashboard Layer</text>
+  <rect x="70" y="160" width="180" height="90" class="box green"/>
+  <text x="160" y="198" text-anchor="middle" class="node">작업자</text>
+  <text x="160" y="224" text-anchor="middle" class="sub">Tray 선택 / 작업 명령</text>
+
+  <rect x="315" y="145" width="260" height="120" class="box blue"/>
+  <text x="445" y="181" text-anchor="middle" class="node">PyQt Dashboard</text>
+  <text x="445" y="209" text-anchor="middle" class="sub">integrated_dashboard</text>
+  <text x="445" y="233" text-anchor="middle" class="sub">버튼 / 상태 표시 / 작업 로그</text>
+  <text x="445" y="255" text-anchor="middle" class="tiny">launch는 Dashboard만 시작</text>
+
+  <rect x="645" y="145" width="250" height="120" class="box purple"/>
+  <text x="770" y="181" text-anchor="middle" class="node">ros_runner.py</text>
+  <text x="770" y="209" text-anchor="middle" class="sub">QProcess 실행 관리</text>
+  <text x="770" y="233" text-anchor="middle" class="sub">stdout 로그 파싱</text>
+  <text x="770" y="255" text-anchor="middle" class="tiny">작업 완료/실패 UI 반영</text>
+
+  <text x="70" y="325" class="section">2. GreenFarm ROS 2 Task Nodes</text>
+  <rect x="70" y="350" width="230" height="78" class="box purple"/>
+  <text x="185" y="383" text-anchor="middle" class="node">manual_control</text>
+  <text x="185" y="407" text-anchor="middle" class="small">수동 조작 / 현재 pose 확인</text>
+
+  <rect x="330" y="350" width="250" height="78" class="box yellow"/>
+  <text x="455" y="383" text-anchor="middle" class="node">tray_soil_state_check</text>
+  <text x="455" y="407" text-anchor="middle" class="small">접촉 z값 기반 토양 측정</text>
+
+  <rect x="610" y="350" width="230" height="78" class="box yellow"/>
+  <text x="725" y="383" text-anchor="middle" class="node">tray_next_step</text>
+  <text x="725" y="407" text-anchor="middle" class="small">부족/정상/많음/장애물 분기</text>
+
+  <rect x="870" y="350" width="230" height="78" class="box yellow"/>
+  <text x="985" y="383" text-anchor="middle" class="node">soil_flatten</text>
+  <text x="985" y="407" text-anchor="middle" class="small">누름판 평탄화 / 재측정</text>
+
+  <rect x="1130" y="350" width="230" height="78" class="box green"/>
+  <text x="1245" y="383" text-anchor="middle" class="node">plant_pick_place</text>
+  <text x="1245" y="407" text-anchor="middle" class="small">식물 pick and place</text>
+
+  <rect x="70" y="465" width="230" height="78" class="box red"/>
+  <text x="185" y="498" text-anchor="middle" class="node">emergency_stop</text>
+  <text x="185" y="522" text-anchor="middle" class="small">MoveStop / 안전정지</text>
+
+  <rect x="330" y="465" width="250" height="78" class="box gray"/>
+  <text x="455" y="498" text-anchor="middle" class="node">common modules</text>
+  <text x="455" y="522" text-anchor="middle" class="small">motion / data / compliance</text>
+
+  <rect x="610" y="465" width="230" height="78" class="box gray"/>
+  <text x="725" y="498" text-anchor="middle" class="node">robot_motion_data.py</text>
+  <text x="725" y="522" text-anchor="middle" class="small">좌표 / 조인트 / 기준값</text>
+
+  <text x="70" y="605" class="section">3. Doosan Virtual / Real Bringup Layer (rqt_graph 확인 계층)</text>
+  <rect x="70" y="630" width="210" height="72" class="box blue"/>
+  <text x="175" y="660" text-anchor="middle" class="node">/dsr01/virtual_node</text>
+  <text x="175" y="684" text-anchor="middle" class="small">mode:=virtual</text>
+
+  <rect x="320" y="630" width="230" height="72" class="box gray"/>
+  <text x="435" y="660" text-anchor="middle" class="node">/dsr01/controller_manager</text>
+  <text x="435" y="684" text-anchor="middle" class="small">ros2_control manager</text>
+
+  <rect x="590" y="630" width="230" height="72" class="box gray"/>
+  <text x="705" y="660" text-anchor="middle" class="node">/dsr01/dsr_hw_interface2</text>
+  <text x="705" y="684" text-anchor="middle" class="small">hardware interface</text>
+
+  <rect x="860" y="630" width="240" height="72" class="box gray"/>
+  <text x="980" y="660" text-anchor="middle" class="node">/dsr01/dsr_controller2</text>
+  <text x="980" y="684" text-anchor="middle" class="small">servo / speed / torque stream</text>
+
+  <rect x="1140" y="630" width="230" height="72" class="box blue"/>
+  <text x="1255" y="660" text-anchor="middle" class="node">/dsr01/robot_state_publisher</text>
+  <text x="1255" y="684" text-anchor="middle" class="small">robot_description / joint_states</text>
+
+  <rect x="110" y="755" width="210" height="58" class="service"/>
+  <text x="215" y="790" text-anchor="middle" class="small">/dsr01/msg/tool_force</text>
+  <rect x="365" y="755" width="210" height="58" class="service"/>
+  <text x="470" y="790" text-anchor="middle" class="small">/dsr01/msg/current_posx</text>
+  <rect x="620" y="755" width="210" height="58" class="service"/>
+  <text x="725" y="790" text-anchor="middle" class="small">/dsr01/msg/joint_state</text>
+  <rect x="875" y="755" width="210" height="58" class="service"/>
+  <text x="980" y="790" text-anchor="middle" class="small">/dsr01/joint_states</text>
+  <rect x="1130" y="755" width="210" height="58" class="service"/>
+  <text x="1235" y="790" text-anchor="middle" class="small">/dsr01/robot_description</text>
+
+  <text x="70" y="880" class="section">4. Physical Workcell</text>
+  <rect x="300" y="865" width="310" height="70" class="box green"/>
+  <text x="455" y="895" text-anchor="middle" class="node">Doosan M0609</text>
+  <text x="455" y="918" text-anchor="middle" class="small">real robot or virtual simulator</text>
+  <rect x="680" y="865" width="360" height="70" class="box yellow"/>
+  <text x="860" y="895" text-anchor="middle" class="node">Tool / Tray / Material</text>
+  <text x="860" y="918" text-anchor="middle" class="small">그리퍼, 누름판, 삽, 식물, 토양, 장애물</text>
+
+  <path d="M250 205 H315" class="arrow"/>
+  <path d="M575 205 H645" class="arrow"/>
+  <path d="M770 265 C695 310 185 310 185 350" class="arrow"/>
+  <path d="M770 265 C735 310 455 310 455 350" class="arrow"/>
+  <path d="M770 265 C765 310 725 310 725 350" class="arrow"/>
+  <path d="M770 265 C805 310 985 310 985 350" class="arrow"/>
+  <path d="M770 265 C860 310 1245 310 1245 350" class="arrow"/>
+  <path d="M770 265 C605 390 185 425 185 465" class="arrow"/>
+  <path d="M455 428 V465" class="arrow"/>
+  <path d="M725 428 V465" class="arrow"/>
+  <path d="M185 543 C185 585 175 600 175 630" class="arrow"/>
+  <path d="M455 543 C455 585 435 600 435 630" class="arrow"/>
+  <path d="M725 543 C725 585 705 600 705 630" class="arrow"/>
+  <path d="M985 428 C985 520 980 570 980 630" class="arrow"/>
+  <path d="M1245 428 C1245 520 1255 570 1255 630" class="arrow"/>
+  <path d="M280 666 H320" class="arrow"/>
+  <path d="M550 666 H590" class="arrow"/>
+  <path d="M820 666 H860" class="arrow"/>
+  <path d="M1100 666 H1140" class="arrow"/>
+  <path d="M215 702 V755" class="arrow"/>
+  <path d="M470 702 V755" class="arrow"/>
+  <path d="M725 702 V755" class="arrow"/>
+  <path d="M980 702 V755" class="arrow"/>
+  <path d="M1255 702 V755" class="arrow"/>
+  <path d="M980 813 C910 840 610 850 500 865" class="arrow"/>
+  <path d="M1255 813 C1170 845 1010 850 900 865" class="arrow"/>
+  <path d="M330 198 C250 250 240 290 330 365" class="dash"/>
+  <text x="250" y="292" class="small">stdout 로그 / 실행 상태 반환</text>
+</svg>

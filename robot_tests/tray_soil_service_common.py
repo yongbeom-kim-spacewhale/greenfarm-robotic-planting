@@ -68,10 +68,15 @@ from robot_tests.robot_motion_data import (
     TRAY_SOIL_TOP_POSES,
     TRAY_SOIL_VEL,
 )
-from robot_tests.tray_soil_state_check_node import classify_tray_result, describe_soil_state, log_classification_result
+from robot_tests.standalone_tests.tray_soil_state_check_node import (
+    classify_tray_result,
+    describe_soil_state,
+    log_classification_result,
+)
 
 
 def prompt_choice(prompt: str, valid_values: list[str]) -> str:
+    """Read a validated operator choice for standalone test nodes."""
     valid_map = {value.upper(): value for value in valid_values}
     while True:
         raw = input(prompt).strip()
@@ -88,10 +93,12 @@ def prompt_choice(prompt: str, valid_values: list[str]) -> str:
 
 
 def prompt_target_tray() -> str:
+    """Ask a standalone operator which physical tray to service."""
     return prompt_choice("\n작업할 트레이 선택 [A/B/C/D], 종료 [q]: ", ["A", "B", "C", "D"]).upper()
 
 
 def import_soil_service_apis(node):
+    """Load motion, force and compliance SDK calls required by soil workflows."""
     try:
         from DSR_ROBOT2 import (
             DR_BASE,
@@ -138,19 +145,23 @@ def import_soil_service_apis(node):
 
 
 def make_pose(posx_fn, x: float, y: float, z: float, rx: float, ry: float, rz: float):
+    """Build a Doosan Cartesian pose with explicit floating-point values."""
     return posx_fn(float(x), float(y), float(z), float(rx), float(ry), float(rz))
 
 
 def make_tray_pose(posx_fn, tray_name: str, x: float, y: float, z: float):
+    """Build a tray point while preserving that tray's taught tool orientation."""
     tray_top_pose = normalize_pose(TRAY_SOIL_TOP_POSES[tray_name])
     return make_pose(posx_fn, x, y, z, tray_top_pose[3], tray_top_pose[4], tray_top_pose[5])
 
 
 def corner_xyz_map(tray_name: str) -> dict[str, tuple[float, float, float]]:
+    """Expose named measurement corners for one tray as a lookup table."""
     return {corner_name: xyz for corner_name, xyz in TRAY_CORNERS_XYZ[tray_name]}
 
 
 def build_corner_pose(posx_fn, tray_name: str, corner_name: str, target_z: float | None = None):
+    """Create an approach/contact pose for a named tray corner."""
     x, y, default_z = corner_xyz_map(tray_name)[corner_name]
     z = default_z if target_z is None else target_z
     return make_tray_pose(posx_fn, tray_name, x, y, z)
@@ -161,6 +172,7 @@ def build_tray_center_pose(
     tray_name: str,
     z_offset: float = 0.0,
 ):
+    """Create a centre pose offset vertically from the tray's taught top pose."""
     tray_top_pose = normalize_pose(TRAY_SOIL_TOP_POSES[tray_name])
     target_pose = tray_top_pose.copy()
     target_pose[2] += float(z_offset)
@@ -168,6 +180,7 @@ def build_tray_center_pose(
 
 
 def go_home_with_gripper_held(node, apis, *, move_up: bool = True) -> None:
+    """Return HOME without changing the currently held tool's gripper state."""
     try:
         current_joint = get_current_joint_timeout(node)
         if is_home_joint(current_joint):
@@ -196,18 +209,27 @@ def go_home_with_gripper_held(node, apis, *, move_up: bool = True) -> None:
 
 
 def inspect_tray_soil(node, apis, tray_name: str) -> dict:
+    """Probe four corners with compliance control and classify the soil state.
+
+    Each corner descends asynchronously until force change indicates contact or
+    the Z travel limit is reached, then returns to its top pose. The returned
+    dictionary is persisted by the dashboard and drives the next operation.
+    """
     def move_line(name: str, target, vel: float = TRAY_SOIL_VEL, acc: float = TRAY_SOIL_ACC, sleep: float = 0.5):
+        """Move linearly to a named probe waypoint and log the SDK result."""
         node.get_logger().info(f"Move start: {name} -> {target}")
         ret = apis["movel"](target, vel=vel, acc=acc)
         node.get_logger().info(f"Move ret: {name} = {ret}")
         apis["wait"](sleep)
 
     def return_to_pose(name: str, pose_values: list[float]) -> None:
+        """Retract to a saved top pose after probing a corner."""
         node.get_logger().info(f"Return to {name}")
         apis["movel"](apis["posx"](pose_values), vel=TRAY_SOIL_PROBE_VEL, acc=TRAY_SOIL_PROBE_ACC)
         apis["wait"](0.5)
 
     def compliance_probe_down(corner_name: str, top_pose_values: list[float]):
+        """Measure one corner contact height using force-change detection."""
         start_pose = normalize_pose(apis["get_current_posx"](ref=apis["DR_BASE"]))
         start_z = start_pose[2]
         limit_z = start_z - TRAY_SOIL_MAX_DOWN_DISTANCE
@@ -287,6 +309,7 @@ def inspect_tray_soil(node, apis, tray_name: str) -> dict:
 
 
 def require_soil_state(node, result: dict, expected_state: str) -> bool:
+    """Guard an action that is valid only for one classified soil state."""
     actual = result["soil_state"]
     if actual != expected_state:
         node.get_logger().warn(
@@ -297,6 +320,7 @@ def require_soil_state(node, result: dict, expected_state: str) -> bool:
 
 
 def require_rock_candidate(node, result: dict) -> bool:
+    """Confirm probe data contains the obstacle signature required for removal."""
     candidates = result["obstacle_candidates"]
     if not candidates:
         node.get_logger().warn("No rock candidate found. Nothing to remove.")
@@ -305,7 +329,10 @@ def require_rock_candidate(node, result: dict) -> bool:
 
 
 def pickup_shovel(node, apis, set_digital_outputs) -> None:
+    """Follow the taught rack route and close the gripper on the shovel."""
     node.get_logger().info("Pickup shovel start")
+    # 자동 흙 작업도 대시보드의 툴 상태 머신과 같은 단계 표식을 사용한다.
+    node.get_logger().info("tool_phase=SHOVEL_PICKING_APPROACH")
     prepare_home_joint(node, set_digital_outputs, apis["wait"])
     move_j(node, apis["movej"], apis["posj"], apis["wait"], "HOME", HOME_JOINT)
     move_j(
@@ -337,6 +364,7 @@ def pickup_shovel(node, apis, set_digital_outputs) -> None:
         acc=20.0,
         check_motion=apis["check_motion"],
     )
+    node.get_logger().info("tool_phase=SHOVEL_PICKING_GRIP")
     gripper_command(
         node,
         set_digital_outputs,
@@ -344,6 +372,7 @@ def pickup_shovel(node, apis, set_digital_outputs) -> None:
         "SHOVEL_GRIP_0010",
         GRIPPER_PICK_CLOSE,
     )
+    node.get_logger().info("tool_phase=SHOVEL_HELD")
     move_up_from_current(
         node=node,
         get_current_posx=apis["get_current_posx"],
@@ -367,7 +396,9 @@ def pickup_shovel(node, apis, set_digital_outputs) -> None:
 
 
 def return_shovel(node, apis, set_digital_outputs) -> None:
+    """Return the shovel to its rack and leave the gripper in HOME preparation."""
     node.get_logger().info("Return shovel start")
+    node.get_logger().info("tool_phase=SHOVEL_PUTTING_APPROACH")
     move_j(
         node,
         apis["movej"],
@@ -401,6 +432,7 @@ def return_shovel(node, apis, set_digital_outputs) -> None:
         acc=20.0,
         check_motion=apis["check_motion"],
     )
+    node.get_logger().info("tool_phase=SHOVEL_PUTTING_RELEASE")
     gripper_command(
         node,
         set_digital_outputs,
@@ -408,6 +440,7 @@ def return_shovel(node, apis, set_digital_outputs) -> None:
         "SHOVEL_RELEASE_0100",
         GRIPPER_HOME_PREPARE,
     )
+    node.get_logger().info("tool_phase=SHOVEL_RELEASED")
     prepare_home_joint(node, set_digital_outputs, apis["wait"])
     move_j(
         node,
@@ -423,6 +456,7 @@ def return_shovel(node, apis, set_digital_outputs) -> None:
 
 
 def select_target_corners(tray_name: str, result: dict, target_names: tuple[str, ...]) -> list[dict]:
+    """Choose correction corners from valid probe heights, with taught fallbacks."""
     corner_lookup = {corner["name"]: dict(corner) for corner in result.get("valid_corners", [])}
     xyz_lookup = corner_xyz_map(tray_name)
     avg_z = result.get("avg_z")
@@ -446,6 +480,7 @@ def select_target_corners(tray_name: str, result: dict, target_names: tuple[str,
 
 
 def fill_shovel_from_supply(node, apis) -> None:
+    """Move the held shovel through the taught soil-supply scoop path."""
     node.get_logger().info("Run soil supply joint sequence")
     for index, joint_values in enumerate(SOIL_SUPPLY_JOINT_SEQUENCE, start=1):
         move_j(
@@ -461,6 +496,7 @@ def fill_shovel_from_supply(node, apis) -> None:
 
 
 def dump_to_waste_box(node, apis) -> None:
+    """Carry removed soil to the waste box, tip it out, and retreat."""
     """Dump removed soil through the taught C-tray waste-box joint route."""
     move_j(
         node,
@@ -499,6 +535,7 @@ def dump_to_waste_box(node, apis) -> None:
 
 
 def run_tray_flatten_action(node, apis, tray_name: str) -> dict:
+    """Compliance-press tray corners to level soil and report press results."""
     """Flatten all four tray corners using force-based contact detection."""
     node.get_logger().info(f"Run compliance tray flatten action tray={tray_name}")
     tray_top_pose = normalize_pose(TRAY_SOIL_TOP_POSES[tray_name])
@@ -619,6 +656,7 @@ def run_tray_flatten_action(node, apis, tray_name: str) -> dict:
 
 
 def shake_scoop_in_tray(node, apis) -> None:
+    """Oscillate the shovel during a soil-removal scoop to loosen material."""
     move_periodic = apis.get("move_periodic")
     if move_periodic is not None:
         node.get_logger().info(
@@ -676,6 +714,7 @@ def shake_scoop_in_tray(node, apis) -> None:
 
 
 def lerp_pose(start_pose: list[float], end_pose: list[float], ratio: float) -> list[float]:
+    """Interpolate a Cartesian waypoint used by the custom C-tray scoop route."""
     return [
         float(start_value + ((end_value - start_value) * ratio))
         for start_value, end_value in zip(start_pose, end_pose)
@@ -683,6 +722,7 @@ def lerp_pose(start_pose: list[float], end_pose: list[float], ratio: float) -> l
 
 
 def run_c_tray_custom_remove_action(node, apis) -> None:
+    """Execute C tray's dedicated taught scoop, shake, lift and dump sequence."""
     node.get_logger().info("Use taught C-tray scoop path. Assumption: shovel is already gripped.")
     move_j(
         node,
@@ -794,6 +834,7 @@ def _drop_soil_to_named_tray_test(
     cycle_index: int,
     prep_joints: list[list[float]] | None = None,
 ) -> None:
+    """Execute one indexed taught soil-drop cycle for the selected tray."""
     cycle = cycles[cycle_index]
     human_index = cycle_index + 1
     total_cycles = len(cycles)
@@ -847,6 +888,7 @@ def _drop_soil_to_named_tray_test(
 
 
 def drop_soil_to_a_tray_test(node, apis, cycle_index: int) -> None:
+    """Run one indexed taught soil-drop route for tray A."""
     _drop_soil_to_named_tray_test(
         node,
         apis,
@@ -859,6 +901,7 @@ def drop_soil_to_a_tray_test(node, apis, cycle_index: int) -> None:
 
 
 def drop_soil_to_c_tray_test(node, apis, cycle_index: int) -> None:
+    """Run one indexed taught soil-drop route for tray C."""
     _drop_soil_to_named_tray_test(
         node,
         apis,
@@ -870,6 +913,7 @@ def drop_soil_to_c_tray_test(node, apis, cycle_index: int) -> None:
 
 
 def drop_soil_to_b_tray_test(node, apis, cycle_index: int) -> None:
+    """Run one indexed taught soil-drop route for tray B."""
     _drop_soil_to_named_tray_test(
         node,
         apis,
@@ -882,6 +926,7 @@ def drop_soil_to_b_tray_test(node, apis, cycle_index: int) -> None:
 
 
 def drop_soil_to_d_tray_test(node, apis, cycle_index: int) -> None:
+    """Run one indexed taught soil-drop route for tray D."""
     _drop_soil_to_named_tray_test(
         node,
         apis,
@@ -894,6 +939,7 @@ def drop_soil_to_d_tray_test(node, apis, cycle_index: int) -> None:
 
 
 def run_soil_add_action(node, apis, set_digital_outputs, tray_name: str, result: dict) -> None:
+    """Pick shovel, repeat supply-to-tray drops, then return the shovel."""
     pickup_shovel(node, apis, set_digital_outputs)
 
     drop_plans = {
@@ -913,12 +959,14 @@ def run_soil_add_action(node, apis, set_digital_outputs, tray_name: str, result:
 
 
 def run_soil_keep_action(node, tray_name: str, result: dict) -> None:
+    """Log that measured soil needs no physical corrective movement."""
     node.get_logger().info(
         f"Tray {tray_name} soil state is OK. No action needed. avg_z={result['avg_z']}"
     )
 
 
 def run_soil_remove_action(node, apis, set_digital_outputs, tray_name: str, result: dict) -> None:
+    """Pick shovel, scoop high corners into waste, then return the shovel."""
     pickup_shovel(node, apis, set_digital_outputs)
 
     if tray_name == "C":
