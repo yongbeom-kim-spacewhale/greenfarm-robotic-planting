@@ -42,6 +42,11 @@ def run_plant_pick_and_place_sequence(
     plant_index: int,
     target_tray: str,
 ) -> None:
+    """Execute the taught source-pick and selected tray placement route.
+
+    Shared by dashboard and standalone entry nodes: approach, grip, lift,
+    traverse to the selected tray, release the plant, and retreat safely.
+    """
     tray_entry_joint = TRAY_ENTRY_JOINTS[source_tray]
     plant_path = TRAY_PLANT_JOINTS[source_tray][plant_index]
     place_path = TARGET_TRAY_PLACE_JOINTS[target_tray]

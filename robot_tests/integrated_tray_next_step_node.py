@@ -71,6 +71,7 @@ TRAY_LABEL_TO_KEY = {
 
 
 def parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Read the tray state snapshot supplied by the dashboard process."""
     parser = argparse.ArgumentParser(description="Integrated tray next step node")
     parser.add_argument("--tray", required=True, choices=["A", "B", "C", "D"])
     parser.add_argument(
@@ -111,6 +112,11 @@ def run_corrective_branch(
     *,
     skip_initial_home: bool = False,
 ) -> None:
+    """Perform add/remove soil or rock removal using the latest probe result.
+
+    A saved measurement avoids probing twice. The function still compares UI
+    state with measured state, performs the selected physical route, then HOME.
+    """
     apis = import_soil_service_apis(node)
     set_digital_outputs_fn, set_digital_output_fn = import_digital_output_apis()
     set_digital_outputs = set_outputs_compat(
@@ -157,6 +163,7 @@ def run_corrective_branch(
 
 
 def run_flatten_branch(node, tray_name: str) -> None:
+    """Switch to press Tool/TCP, flatten one tray, HOME, then restore defaults."""
     apis = import_soil_service_apis(node)
 
     setup_tool_and_tcp(
@@ -173,6 +180,7 @@ def run_flatten_branch(node, tray_name: str) -> None:
 
 
 def run_plant_branch(node, tray_label: str, plant_index: int) -> None:
+    """Execute the taught plant source-to-selected-tray transfer sequence."""
     motion_apis = import_basic_motion_apis(node)
     set_digital_outputs_fn, set_digital_output_fn = import_digital_output_apis()
     set_digital_outputs = set_outputs_compat(
@@ -206,6 +214,7 @@ def run_plant_branch(node, tray_label: str, plant_index: int) -> None:
 
 
 def main(args=None):
+    """Dispatch one dashboard next-step request to correction, flatten or plant."""
     parsed_args = parse_cli_args(args)
     rclpy.init(args=args)
     node = rclpy.create_node("integrated_tray_next_step", namespace=ROBOT_ID)

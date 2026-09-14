@@ -32,6 +32,7 @@ COMMAND_MODES = (
 
 
 def call_read_service(node, service_type, service_name: str, request, timeout_sec: float = 3.0):
+    """Call a controller read service with a finite dashboard-friendly timeout."""
     client = node.create_client(service_type, service_name)
     try:
         if not client.wait_for_service(timeout_sec=timeout_sec):
@@ -51,6 +52,7 @@ def call_read_service(node, service_type, service_name: str, request, timeout_se
 
 
 def parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Select persistent stdin-server mode or a single manual command."""
     parser = argparse.ArgumentParser(description="Integrated manual control node")
     parser.add_argument("--mode", required=True, choices=COMMAND_MODES)
     parser.add_argument("--joints", nargs=6, type=float)
@@ -60,6 +62,7 @@ def parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def execute_command(node, apis: dict, command: dict) -> None:
+    """Execute one read/move/recovery command received from the dashboard."""
     mode = str(command["mode"])
     if mode == "read-joint":
         from dsr_msgs2.srv import GetCurrentPosj
@@ -131,6 +134,7 @@ def execute_command(node, apis: dict, command: dict) -> None:
 
 
 def emit_result(node, mode: str, success: bool, error: str = "") -> None:
+    """Print a stable JSON marker consumed by the dashboard output parser."""
     payload = {"mode": mode, "success": success, "error": error}
     node.get_logger().info(
         "manual_command_result_json="
@@ -139,6 +143,7 @@ def emit_result(node, mode: str, success: bool, error: str = "") -> None:
 
 
 def run_server(node, apis: dict) -> None:
+    """Process newline-delimited JSON commands without restarting the ROS node."""
     setup_tool_and_tcp(node, None, None, PLANT_TOOL_NAME, PLANT_TCP_NAME)
     node.get_logger().info(
         f"startup_config complete tool={PLANT_TOOL_NAME}, tcp={PLANT_TCP_NAME}"
@@ -159,6 +164,7 @@ def run_server(node, apis: dict) -> None:
 
 
 def main(args=None):
+    """Create the manual-control ROS context and run server or one-shot mode."""
     parsed = parse_cli_args(args)
     rclpy.init(args=args)
     node = rclpy.create_node("integrated_manual_control", namespace=ROBOT_ID)

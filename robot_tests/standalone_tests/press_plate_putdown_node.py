@@ -87,6 +87,8 @@ def run_sequence(
     move_l(node, movel, posx, wait, "PLATE_PLACE", PLATE_PLACE_POSE, check_motion=check_motion)
 
     node.get_logger().info("Step 5/8: release press plate")
+    # 해제 명령 도중 정지되면 누름판이 빠졌는지 확정할 수 없도록 중간 상태를 알린다.
+    node.get_logger().info("tool_phase=PRESS_PUTTING_RELEASE")
     gripper_command(
         node,
         set_digital_outputs,
@@ -94,6 +96,8 @@ def run_sequence(
         "RELEASE_MID_OPEN_1000",
         PLANT_GRIPPER_WAYPOINT1_PREPARE,
     )
+    # 열기 명령이 정상 반환된 뒤에만 툴 없음 상태로 확정한다.
+    node.get_logger().info("tool_phase=PRESS_RELEASED")
 
     node.get_logger().info("Step 6/8: move back to top pose")
     move_l(node, movel, posx, wait, "PLATE_TOP_RETURN", PLATE_TOP_POSE, check_motion=check_motion)

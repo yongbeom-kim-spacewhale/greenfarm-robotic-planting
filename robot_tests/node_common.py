@@ -11,11 +11,13 @@ ROBOT_MODEL = "m0609"
 
 
 def configure_dsr_init(dr_init_module: Any) -> None:
+    """Set robot id/model globals before the Doosan SDK binds its ROS services."""
     dr_init_module.__dsr__id = ROBOT_ID
     dr_init_module.__dsr__model = ROBOT_MODEL
 
 
 def import_basic_motion_apis(node):
+    """Load the joint, Cartesian, pose and Tool/TCP APIs used by motion nodes."""
     try:
         from DSR_ROBOT2 import (
             DR_BASE,
@@ -54,6 +56,7 @@ def import_basic_motion_apis(node):
 
 
 def import_digital_output_apis():
+    """Return current and legacy controller I/O functions for gripper control."""
     try:
         from DSR_ROBOT2 import set_digital_outputs as set_digital_outputs_fn
     except ImportError:
@@ -113,6 +116,7 @@ def _set_named_robot_config(
 
 
 def setup_tool_and_tcp(node, set_tool, set_tcp, tool_name: str, tcp_name: str) -> None:
+    """Synchronise controller Tool/TCP names before executing taught poses."""
     # set_tool/set_tcp 인자는 기존 호출부 호환을 위해 유지한다. SDK 함수는 응답 제한시간이
     # 없어 controller가 응답하지 않으면 노드가 영구 대기하므로 timeout 가능한 직접 서비스를 쓴다.
     del set_tool, set_tcp

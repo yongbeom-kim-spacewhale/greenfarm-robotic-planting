@@ -16,7 +16,11 @@ def _find_repo_root(start: Path) -> Path | None:
     return None
 
 def bootstrap_dsr_python() -> None:
-    """Add common Doosan module locations to sys.path when workspace not overlaid."""
+    """Make Doosan SDK modules importable when the ROS workspace is not overlaid.
+
+    Robot nodes call this before importing ``DR_init``. It changes Python's
+    module search path only and never connects to or moves the robot.
+    """
     if importlib.util.find_spec("DR_init") is not None:
         return
 

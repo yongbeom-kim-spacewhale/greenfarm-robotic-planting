@@ -126,6 +126,8 @@ def run_sequence(node, movej, movel, posj, posx, set_digital_outputs, wait, chec
     )
 
     node.get_logger().info("Step 6/9: strong close gripper")
+    # 이 표식 이후 정지되면 그리퍼 명령의 물리적 완료 여부를 확정할 수 없다.
+    node.get_logger().info("tool_phase=PRESS_PICKING_GRIP")
     gripper_command(
         node,
         set_digital_outputs,
@@ -133,6 +135,8 @@ def run_sequence(node, movej, movel, posj, posx, set_digital_outputs, wait, chec
         "PICK_CLOSE_0010",
         GRIPPER_PICK_CLOSE,
     )
+    # 닫기 명령이 정상 반환된 뒤에만 누름판 보유 상태로 확정한다.
+    node.get_logger().info("tool_phase=PRESS_PLATE_HELD")
 
     node.get_logger().info("Step 7/9: move back to top pose")
     move_l(

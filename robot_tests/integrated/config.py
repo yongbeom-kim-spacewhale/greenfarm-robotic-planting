@@ -1,4 +1,4 @@
-"""Integrated dashboard config and shared constants."""
+"""통합 대시보드의 설정과 공용 상수를 정의한다."""
 
 from __future__ import annotations
 
@@ -32,36 +32,66 @@ TOOL_STATE_NONE = "NONE"
 TOOL_STATE_PRESS = "PRESS_PLATE_HELD"
 TOOL_STATE_SHOVEL = "SHOVEL_HELD"
 TOOL_STATE_UNKNOWN = "UNKNOWN"
+TOOL_STATE_PRESS_PICKING_APPROACH = "PRESS_PICKING_APPROACH"
+TOOL_STATE_PRESS_PICKING_GRIP = "PRESS_PICKING_GRIP"
+TOOL_STATE_PRESS_PUTTING_APPROACH = "PRESS_PUTTING_APPROACH"
+TOOL_STATE_PRESS_PUTTING_RELEASE = "PRESS_PUTTING_RELEASE"
+TOOL_STATE_SHOVEL_PICKING_APPROACH = "SHOVEL_PICKING_APPROACH"
+TOOL_STATE_SHOVEL_PICKING_GRIP = "SHOVEL_PICKING_GRIP"
+TOOL_STATE_SHOVEL_PUTTING_APPROACH = "SHOVEL_PUTTING_APPROACH"
+TOOL_STATE_SHOVEL_PUTTING_RELEASE = "SHOVEL_PUTTING_RELEASE"
+
+TOOL_TRANSITION_STATES = {
+    TOOL_STATE_PRESS_PICKING_APPROACH,
+    TOOL_STATE_PRESS_PICKING_GRIP,
+    TOOL_STATE_PRESS_PUTTING_APPROACH,
+    TOOL_STATE_PRESS_PUTTING_RELEASE,
+    TOOL_STATE_SHOVEL_PICKING_APPROACH,
+    TOOL_STATE_SHOVEL_PICKING_GRIP,
+    TOOL_STATE_SHOVEL_PUTTING_APPROACH,
+    TOOL_STATE_SHOVEL_PUTTING_RELEASE,
+}
 
 HOME_POSE = list(HOME_JOINT)
 
 WORKSPACE_SETUP_PATH = "/home/rokey/ws_cobot_pjt/ws_cobot1/install/setup.bash"
 
+# 실제 연결 해제 이벤트와 로봇 상태 heartbeat를 함께 사용한다. 일시적인 메시지
+# 누락은 무시하고, 재연결은 여러 메시지를 연속 수신한 뒤 확정한다.
+ROBOT_JOINT_STATE_TOPIC = "/dsr01/joint_states"
+ROBOT_DISCONNECTION_TOPIC = "/dsr01/robot_disconnection"
+ROBOT_ERROR_TOPIC = "/dsr01/error"
+ROBOT_STATE_SERVICE = "/dsr01/system/get_robot_state"
+ROBOT_CONTROL_SERVICE = "/dsr01/system/set_robot_control"
+ROBOT_HEARTBEAT_TIMEOUT_SECONDS = 5.0
+ROBOT_RECONNECT_MESSAGE_COUNT = 3
+ROBOT_STATE_POLL_INTERVAL_SECONDS = 0.5
+ROBOT_STATE_REQUEST_TIMEOUT_SECONDS = 2.0
+
+# 현장 확인값: 물리 안전복구 완료=1, SAFE_OFF=3, 물리 비상정지=6.
+# /dsr01/system/get_robot_state 응답을 기준으로 판정한다.
+ROBOT_STATE_STANDBY = 1
+ROBOT_STATE_SAFE_OFF = 3
+ROBOT_STATE_EMERGENCY_STOP = 6
+ROBOT_RECOVERY_READY_STATES = (ROBOT_STATE_STANDBY, ROBOT_STATE_SAFE_OFF)
+ROBOT_CONTROL_RESET_SAFE_OFF = 3
+ROBOT_RECOVERY_CONFIRM_TIMEOUT_MS = 8000
+
 UI_PATH_CANDIDATES = (
     "/home/rokey/ws_cobot_pjt/ws_cobot1/src/robot_tests/robot_tests/integrated/smartfarm_dashboard.ui",
 )
 
-ROS_CONNECTION_CHECK_SERVICE = "/dsr01/system/get_robot_state"
 INTER_NODE_DELAY_MS = 1000
 PRESS_PICKUP_HANDOFF_DELAY_MS = 500
 PRESS_PUTDOWN_HANDOFF_DELAY_MS = 500
 
 MEASURE_NODE = "integrated_tray_soil_state_check_node"
-FLATTEN_NODE = "integrated_tray_soil_flatten_node"
-REMOVE_SOIL_NODE = "tray_soil_remove_node"
-ADD_SOIL_NODE = "tray_soil_add_node"
-ROCK_REMOVE_NODE = "tray_rock_remove_node"
-PLANT_NODE = "plant_pick_and_place_tray_select_node"
 HOME_NODE = "go_home_test"
-PRESS_PICKUP_NODE = "press_plate_pickup_node"
-PRESS_PUTDOWN_NODE = "press_plate_putdown_node"
-SHOVEL_PICKUP_NODE = "shovel_pickup_node"
-SHOVEL_PUTDOWN_NODE = "shovel_putdown_node"
-INTEGRATED_PLANT_NODE = "integrated_plant_pick_and_place_node"
 INTEGRATED_FLATTEN_NODE = "integrated_tray_soil_flatten_node"
 INTEGRATED_NEXT_STEP_NODE = "integrated_tray_next_step_node"
 INTEGRATED_MANUAL_NODE = "integrated_manual_control_node"
 INTEGRATED_ESTOP_NODE = "integrated_emergency_stop_node"
+INTEGRATED_TOOL_NODE = "integrated_tool_control_node"
 
 TRAY_TO_PLANT_INDEX = {
     "A": 1,
